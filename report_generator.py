@@ -224,30 +224,154 @@ def print_summary(report: Dict[str, Any]):
     print("\n" + "=" * 60)
 
 
+def save_markdown_report(report: Dict[str, Any], filepath: str = '/tmp/nightly_system_report.md'):
+    """保存 Markdown 格式報告"""
+    with open(filepath, 'w') as f:
+        # Header
+        f.write(f"# Nightly System Report\n\n")
+        f.write(f"**Generated:** {report['timestamp']}\n\n")
+
+        # Status
+        f.write(f"## Status\n\n")
+        status_emoji = "✅" if report['overall_status'] == 'healthy' else "⚠️"
+        f.write(f"{status_emoji} {report['overall_status'].upper()}\n\n")
+
+        # Issues
+        if report['overall_status'] != 'healthy':
+            f.write(f"### Issues\n\n")
+            for issue in report.get('issues', []):
+                f.write(f"- {issue}\n\n")
+
+        # System Health
+        f.write(f"## System Health\n\n")
+        health = report.get('health', {})
+
+        disk = health.get('disk', {})
+        f.write(f"- **Disk:** {disk.get('used', 'N/A')} / {disk.get('size', 'N/A')} ({disk.get('usage_percent', 'N/A')})\n")
+
+        memory = health.get('memory', {})
+        f.write(f"- **Memory:** {memory.get('used', 'N/A')} / {memory.get('total', 'N/A')} (Available: {memory.get('available', 'N/A')})\n")
+
+        load = health.get('load', {})
+        f.write(f"- **Load:** {load.get('1min', 'N/A')} / {load.get('5min', 'N/A')} / {load.get('15min', 'N/A')}\n")
+
+        warnings = health.get('warnings', [])
+        if warnings:
+            f.write(f"\n**Warnings:**\n")
+            for w in warnings:
+                f.write(f"- {w}\n")
+        f.write("\n")
+
+        # Docker Containers
+        f.write(f"## Docker Containers\n\n")
+        docker = report.get('docker', {})
+        f.write(f"**Running:** {docker.get('container_count', 0)} containers\n\n")
+
+        if docker.get('containers'):
+            f.write("| Name | Status | Ports |\n")
+            f.write("|------|--------|-------|\n")
+            for container in docker.get('containers', []):
+                parts = container.split('\t')
+                if len(parts) >= 2:
+                    name = parts[0]
+                    status = parts[1] if len(parts) > 1 else ''
+                    ports = parts[2] if len(parts) > 2 else ''
+                    f.write(f"| {name} | {status} | {ports} |\n")
+        f.write("\n")
+
+        # OpenClaw Status
+        f.write(f"## OpenClaw Status\n\n")
+        checks = report.get('health', {}).get('checks', {})
+        if 'openclaw' in checks:
+            openclaw = checks['openclaw']
+            f.write(f"- **Status:** {'Running' if openclaw.get('running') else 'Stopped'}\n")
+            f.write(f"- **PID:** {openclaw.get('pid', 'N/A')}\n")
+
+        if 'agent_sessions' in checks:
+            sessions = checks['agent_sessions']
+            f.write(f"- **Agent Sessions:** {sessions.get('size', 'N/A')}\n\n")
+
+        # Log Analysis
+        f.write(f"## Log Analysis\n\n")
+        log = report.get('log_analysis', {})
+        f.write(f"- **Total Recommendations:** {log.get('total_recommendations', 0)}\n")
+        f.write(f"- **High Priority:** {log.get('high_priority', 0)}\n")
+        f.write(f"- **Medium Priority:** {log.get('medium_priority', 0)}\n\n")
+
+        # Cleanup Results
+        f.write(f"## Cleanup Results\n\n")
+        cleanup = report.get('cleanup', {}).get('summary', {})
+        f.write(f"- **Actions:** {cleanup.get('successful', 0)}/{cleanup.get('total_actions', 0)} successful\n")
+
+        disk_before = report.get('cleanup', {}).get('disk_before', {}).get('usage_percent', 'N/A')
+        disk_after = report.get('cleanup', {}).get('disk_after', {}).get('usage_percent', 'N/A')
+        f.write(f"- **Disk Usage:** {disk_before}% → {disk_after}%\n")
+
+        # Docker disk usage
+        docker_usage = report.get('cleanup', {}).get('disk_before', {})
+        if docker_usage:
+            f.write(f"\n**Docker Disk Usage:**\n")
+            f.write(f"- Images: {docker_usage.get('images', {}).get('total_count', 'N/A')}\n")
+            f.write(f"- Containers: {docker_usage.get('containers', {}).get('total_count', 'N/A')}\n")
+            f.write(f"- Build Cache: {docker_usage.get('build_cache', {}).get('total_count', 'N/A')}\n\n")
+
+        # Git Status
+        f.write(f"## Git Status\n\n")
+        git = report.get('git', {})
+        if git.get('status') == 'ok':
+            f.write(f"- **Branch:** {git.get('branch', 'N/A')}\n")
+            f.write(f"- **Last Commit:** {git.get('last_commit', 'N/A')}\n")
+            f.write(f"- **Uncommitted Changes:** {git.get('changes_count', 0)}\n\n")
+        else:
+            f.write(f"- **Status:** {git.get('status', 'N/A')}\n\n")
+
+        # Network Stats
+        network = report.get('network', {})
+        if network.get('status') == 'ok':
+            f.write(f"## Network\n\n")
+            f.write(f"- **Interfaces:** {len(network.get('interfaces', []))}\n")
+            f.write(f"- **Listening Ports:** {network.get('listening_ports', 0)}\n\n")
+
+        # Uptime
+        system = report.get('system', {})
+        if system.get('uptime'):
+            f.write(f"## System Uptime\n\n")
+            f.write(f"```\n{system['uptime']}\n```\n\n")
+
+    return filepath
+
+
 def main():
     """主函數"""
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Generate system report')
+    parser.add_argument('--format', choices=['json', 'markdown', 'both'], default='both',
+                        help='Output format')
+    parser.add_argument('--output', '-o', help='Output file path (without extension)')
+
+    args = parser.parse_args()
+
+    # 生成報告
     report = generate_system_report()
 
-    # 保存報告
-    filepath = save_report(report)
-    print(f"\n完整報告已保存到: {filepath}")
+    # 設置輸出路徑
+    base_path = args.output or '/tmp/nightly_system_report'
+
+    # 保存 JSON
+    if args.format in ['json', 'both']:
+        json_path = f"{base_path}.json"
+        save_report(report, json_path)
+        print(f"JSON 報告已保存到: {json_path}")
+
+    # 保存 Markdown
+    if args.format in ['markdown', 'both']:
+        md_path = f"{base_path}.md"
+        save_markdown_report(report, md_path)
+        print(f"Markdown 報告已保存到: {md_path}")
 
     # 打印摘要
     print_summary(report)
-
-    # 保存 Markdown 格式
-    md_filepath = filepath.replace('.json', '.md')
-    with open(md_filepath, 'w') as f:
-        f.write(f"# Nightly System Report\n\n")
-        f.write(f"**Generated:** {report['timestamp']}\n\n")
-        f.write(f"## Status\n\n{report['overall_status'].upper()}\n\n")
-
-        if report['overall_status'] != 'healthy':
-            f.write("## Issues\n\n")
-            for issue in report.get('issues', []):
-                f.write(f"- {issue}\n")
-
-    print(f"Markdown 報告已保存到: {md_filepath}")
 
 
 if __name__ == '__main__':
