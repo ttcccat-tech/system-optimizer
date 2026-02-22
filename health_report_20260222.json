@@ -1,0 +1,62 @@
+{
+  "timestamp": "2026-02-22T18:04:22.020350",
+  "checks": {
+    "disk": {
+      "status": "ok",
+      "filesystem": "/dev/mapper/ubuntu--vg-ubuntu--lv",
+      "size": "194G",
+      "used": "29G",
+      "available": "156G",
+      "usage_percent": "16%",
+      "warning": false
+    },
+    "memory": {
+      "status": "ok",
+      "total": "7.8Gi",
+      "used": "2.2Gi",
+      "available": "5.1Gi",
+      "warning": false
+    },
+    "load": {
+      "status": "ok",
+      "1min": 0.56,
+      "5min": 0.48,
+      "15min": 0.46,
+      "warning": false
+    },
+    "docker": {
+      "status": "ok",
+      "total": 2,
+      "running": 2,
+      "stopped": 0,
+      "containers": [
+        {
+          "name": "my-openclaw-final",
+          "status": "Up 36 hours",
+          "running": true
+        },
+        {
+          "name": "worker-dashboard-web-1",
+          "status": "Up 2 days",
+          "running": true
+        }
+      ],
+      "warning": false
+    },
+    "openclaw": {
+      "status": "ok",
+      "running": true,
+      "pid": "830"
+    },
+    "agent_sessions": {
+      "status": "ok",
+      "size": "4.5M",
+      "path": "/home/user/.openclaw/agents"
+    }
+  },
+  "overall": {
+    "status": "healthy",
+    "warnings": [],
+    "errors": []
+  }
+}
